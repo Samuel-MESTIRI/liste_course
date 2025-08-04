@@ -1,29 +1,28 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
-
-import { useColorScheme } from '@/hooks/useColorScheme';
+import { Stack } from "expo-router";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import Header from "../src/components/Header";
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-  const [loaded] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-  });
-
-  if (!loaded) {
-    // Async font loading only occurs in development.
-    return null;
-  }
-
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="+not-found" />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <Stack
+        screenOptions={{
+          header: ({ route }) => {
+            const routePath = route.name as string;
+            
+            // Personnalisation du titre en fonction de la route
+            let title = "Liste de Courses";
+            if (routePath === "recette") title = "📖 Mes Recettes";
+            if (routePath === "ajouter-recette") title = "➕ Nouvelle Recette";
+            if (routePath === "modifier-recette/[id]") title = "✏️ Modifier la Recette";
+
+            // Ne pas afficher le bouton retour sur la page d'accueil
+            const showBackButton = routePath !== "index";
+
+            return <Header title={title} showBackButton={showBackButton} />;
+          },
+        }}
+      />
+    </GestureHandlerRootView>
   );
 }
