@@ -33,22 +33,54 @@ const setItem = async <T>(key: string, value: T[]): Promise<void> => {
 
 // Gestionnaire de recettes
 export const RecipeManager = {
-  getRecipes: () => getItem<Recipe>(STORAGE_KEYS.RECIPES),
+  getRecipes: async () => {
+    const recipes = await getItem<Recipe>(STORAGE_KEYS.RECIPES);
+    // Migration: ajouter le champ steps aux recettes qui n'en ont pas
+    const migratedRecipes = recipes.map(recipe => ({
+      ...recipe,
+      steps: recipe.steps || []
+    }));
+    // Sauvegarder les recettes migrées si des changements ont été apportés
+    const hasChanges = recipes.some((recipe, index) => 
+      !recipe.steps && migratedRecipes[index].steps
+    );
+    if (hasChanges) {
+      await setItem(STORAGE_KEYS.RECIPES, migratedRecipes);
+    }
+    return migratedRecipes;
+  },
   saveRecipe: async (recipe: Recipe) => {
     const recipes = await getItem<Recipe>(STORAGE_KEYS.RECIPES);
     const index = recipes.findIndex(r => r.id === recipe.id);
+    // S'assurer que les steps sont définis
+    const recipeWithSteps = {
+      ...recipe,
+      steps: recipe.steps || []
+    };
     if (index !== -1) {
       // Mise à jour d'une recette existante
-      recipes[index] = recipe;
+      recipes[index] = recipeWithSteps;
     } else {
       // Nouvelle recette
-      recipes.push(recipe);
+      recipes.push(recipeWithSteps);
     }
     await setItem(STORAGE_KEYS.RECIPES, recipes);
   },
   getRecipeById: async (id: number): Promise<Recipe | undefined> => {
     const recipes = await getItem<Recipe>(STORAGE_KEYS.RECIPES);
-    return recipes.find(recipe => recipe.id === id);
+    const recipe = recipes.find(recipe => recipe.id === id);
+    // Migration: ajouter le champ steps si il n'existe pas
+    if (recipe && !recipe.steps) {
+      const migratedRecipe = { ...recipe, steps: [] };
+      // Sauvegarder la recette migrée
+      const index = recipes.findIndex(r => r.id === id);
+      if (index !== -1) {
+        recipes[index] = migratedRecipe;
+        await setItem(STORAGE_KEYS.RECIPES, recipes);
+      }
+      return migratedRecipe;
+    }
+    return recipe;
   },
   deleteRecipe: async (id: number): Promise<void> => {
     const recipes = await getItem<Recipe>(STORAGE_KEYS.RECIPES);

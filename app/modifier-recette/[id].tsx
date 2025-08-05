@@ -2,7 +2,8 @@ import { FontAwesome } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Button } from "../../src/components/Button";
 import { Card } from "../../src/components/Card";
 import { Header } from "../../src/components/Header";
@@ -18,9 +19,12 @@ export default function EditRecipePage() {
     name: "",
     description: "",
     imageUri: "",
+    steps: [],
   });
   const [ingredients, setIngredients] = useState<Array<{ name: string; quantity: number; unit: string }>>([]);
   const [newIngredient, setNewIngredient] = useState({ name: "", quantity: 1, unit: "u" });
+  const [steps, setSteps] = useState<string[]>([]);
+  const [newStep, setNewStep] = useState<string>("");
   const [selectedTags, setSelectedTags] = useState<number[]>([]);
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
   const [unitModalVisible, setUnitModalVisible] = useState(false);
@@ -46,6 +50,7 @@ export default function EditRecipePage() {
       const recipeData = await RecipeManager.getRecipeById(Number(id));
       if (recipeData) {
         setRecipe(recipeData);
+        setSteps(recipeData.steps || []);
 
         const recipeIngredients = await RecipeIngredientManager.getIngredientsForRecipe(Number(id));
         const allIngredients = await IngredientManager.getIngredients();
@@ -100,6 +105,21 @@ export default function EditRecipePage() {
     );
   };
 
+  const handleAddStep = () => {
+    if (newStep.trim()) {
+      const updatedSteps = [...steps, newStep.trim()];
+      setSteps(updatedSteps);
+      setRecipe({ ...recipe, steps: updatedSteps });
+      setNewStep("");
+    }
+  };
+
+  const handleRemoveStep = (index: number) => {
+    const updatedSteps = steps.filter((_, i) => i !== index);
+    setSteps(updatedSteps);
+    setRecipe({ ...recipe, steps: updatedSteps });
+  };
+
   const handleDelete = () => {
     Alert.alert(
       "Supprimer la recette",
@@ -146,6 +166,7 @@ export default function EditRecipePage() {
         name: recipe.name,
         description: recipe.description || "",
         imageUri: recipe.imageUri || "",
+        steps: steps || [],
         createdAt: recipe.createdAt || new Date(),
         updatedAt: new Date(),
       };
@@ -225,7 +246,13 @@ export default function EditRecipePage() {
         }
       />
       
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <KeyboardAwareScrollView 
+        style={styles.content} 
+        showsVerticalScrollIndicator={false}
+        enableOnAndroid={true}
+        extraHeight={100}
+        extraScrollHeight={100}
+      >
         {/* Recipe Info Card */}
         <Card style={styles.section}>
           <Text style={styles.sectionTitle}>Informations générales</Text>
@@ -363,7 +390,59 @@ export default function EditRecipePage() {
             </View>
           </Card>
         )}
-      </ScrollView>
+
+        {/* Steps Card */}
+        <Card style={styles.section}>
+          <Text style={styles.sectionTitle}>Étapes de préparation</Text>
+          
+          {/* Steps List */}
+          <View style={styles.stepsList}>
+            {steps.map((step, index) => (
+              <View key={index} style={styles.stepItem}>
+                <View style={styles.stepNumber}>
+                  <Text style={styles.stepNumberText}>{index + 1}</Text>
+                </View>
+                <View style={styles.stepContent}>
+                  <Text style={styles.stepText}>{step}</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.removeStepButton}
+                  onPress={() => handleRemoveStep(index)}
+                >
+                  <FontAwesome name="trash" size={16} color={theme.colors.error} />
+                </TouchableOpacity>
+              </View>
+            ))}
+            
+            {/* Current Step Input */}
+            <View style={styles.stepItem}>
+              <View style={styles.stepNumber}>
+                <Text style={styles.stepNumberText}>{steps.length + 1}</Text>
+              </View>
+              <View style={styles.stepInputWrapper}>
+                <Input
+                  value={newStep}
+                  onChangeText={setNewStep}
+                  placeholder={`Étape ${steps.length + 1}...`}
+                  variant="outlined"
+                  multiline
+                  numberOfLines={3}
+                  style={styles.stepInput}
+                  onSubmitEditing={handleAddStep}
+                />
+              </View>
+              {newStep.trim() && (
+                <TouchableOpacity
+                  style={styles.addStepButton}
+                  onPress={handleAddStep}
+                >
+                  <FontAwesome name="check" size={16} color={theme.colors.surface} />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </Card>
+      </KeyboardAwareScrollView>
 
       {/* Unit Selection Modal */}
       <Modal
@@ -599,5 +678,81 @@ const styles = StyleSheet.create({
   unitOptionText: {
     ...theme.typography.body,
     color: theme.colors.text,
+  },
+  
+  // Styles pour les étapes
+  stepsList: {
+    marginBottom: theme.spacing.lg,
+  },
+  
+  stepItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: theme.spacing.md,
+    gap: theme.spacing.sm,
+  },
+  
+  stepNumber: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: theme.colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: theme.spacing.xs,
+  },
+  
+  stepNumberText: {
+    ...theme.typography.bodySmall,
+    color: theme.colors.surface,
+    fontWeight: '600',
+  },
+  
+  stepInput: {
+    flex: 1,
+    minHeight: 80,
+  },
+  
+  stepInputWrapper: {
+    flex: 1,
+    marginRight: theme.spacing.sm,
+  },
+  
+  stepContent: {
+    flex: 1,
+    padding: theme.spacing.md,
+    backgroundColor: theme.colors.background,
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.borderLight,
+  },
+  
+  stepText: {
+    ...theme.typography.body,
+    color: theme.colors.text,
+    lineHeight: 20,
+  },
+  
+  removeStepButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: theme.colors.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: theme.spacing.xs,
+    borderWidth: 1,
+    borderColor: theme.colors.borderLight,
+  },
+  
+  addStepButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: theme.colors.success,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: theme.spacing.xs,
+    ...theme.shadows.small,
   },
 });
