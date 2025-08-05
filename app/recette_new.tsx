@@ -1,6 +1,6 @@
 import { FontAwesome } from '@expo/vector-icons';
-import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "expo-router";
+import { useEffect, useState } from "react";
 import { FlatList, Image, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Button } from "../src/components/Button";
 import { Card } from "../src/components/Card";
@@ -12,58 +12,14 @@ export default function RecipePage() {
   const router = useRouter();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
-  const [selectedTags, setSelectedTags] = useState<Set<number>>(new Set());
+  const [selectedTag, setSelectedTag] = useState<number | null>(null);
   const [favorites, setFavorites] = useState<Set<number>>(new Set());
-  const [showFavoritesOnly, setShowFavoritesOnly] = useState<boolean>(false);
-
-  const [filteredRecipes, setFilteredRecipes] = useState<Recipe[]>([]);
 
   useEffect(() => {
     loadRecipes();
     loadTags();
     loadFavorites();
   }, []);
-
-  // Recharger les recettes à chaque fois qu'on revient sur la page
-  useFocusEffect(
-    useCallback(() => {
-      loadRecipes();
-      loadFavorites();
-    }, [])
-  );
-
-  useEffect(() => {
-    filterRecipes();
-  }, [recipes, selectedTags, showFavoritesOnly]);
-
-  const filterRecipes = async () => {
-    let filtered = recipes;
-
-    // Filtre par favoris si activé
-    if (showFavoritesOnly) {
-      filtered = filtered.filter(recipe => favorites.has(recipe.id));
-    }
-
-    // Filtre par tags si des tags sont sélectionnés
-    if (selectedTags.size === 0) {
-      setFilteredRecipes(filtered);
-      return;
-    }
-    
-    const tagFiltered = [];
-    for (const recipe of filtered) {
-      try {
-        const recipeTags = await RecipeTagManager.getTagsForRecipe(recipe.id);
-        // Vérifier si la recette a au moins un des tags sélectionnés
-        if (recipeTags.some(rt => selectedTags.has(rt.tagId))) {
-          tagFiltered.push(recipe);
-        }
-      } catch (error) {
-        console.error('Erreur lors du filtrage:', error);
-      }
-    }
-    setFilteredRecipes(tagFiltered);
-  };
 
   const loadRecipes = async () => {
     try {
@@ -94,12 +50,8 @@ export default function RecipePage() {
 
   const addToShoppingList = async (recipeId: number) => {
     try {
-      console.log('Tentative d\'ajout de la recette à la liste:', recipeId);
       await ShoppingListManager.addRecipeToShoppingList(recipeId);
-      console.log('Recette ajoutée à la liste de courses avec succès');
-      
-      // Recharger la liste de courses pour voir si les éléments ont été ajoutés
-      router.push('/');
+      // Optionnel: afficher un message de succès
     } catch (error) {
       console.error('Erreur lors de l\'ajout à la liste:', error);
     }
@@ -124,7 +76,16 @@ export default function RecipePage() {
   };
 
   const getFilteredRecipes = () => {
-    return filteredRecipes;
+    if (!selectedTag) return recipes;
+    
+    return recipes.filter(async (recipe) => {
+      try {
+        const recipeTags = await RecipeTagManager.getTagsForRecipe(recipe.id);
+        return recipeTags.some(rt => rt.tagId === selectedTag);
+      } catch (error) {
+        return false;
+      }
+    });
   };
 
   const renderRecipe = ({ item: recipe }: { item: Recipe }) => (
@@ -168,7 +129,12 @@ export default function RecipePage() {
             </Text>
           )}
           
-          <View style={styles.recipeActions}>            
+          <View style={styles.recipeActions}>
+            <View style={styles.recipeTime}>
+              <FontAwesome name="clock-o" size={14} color={theme.colors.textSecondary} />
+              <Text style={styles.timeText}>30 min</Text>
+            </View>
+            
             <Button
               title="Ajouter"
               icon="shopping-cart"
@@ -183,50 +149,22 @@ export default function RecipePage() {
     </Card>
   );
 
-  const toggleTag = (tagId: number) => {
-    setSelectedTags(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(tagId)) {
-        newSet.delete(tagId);
-      } else {
-        newSet.add(tagId);
-        // Quand on sélectionne un tag, on désactive le filtre favoris
-        setShowFavoritesOnly(false);
-      }
-      return newSet;
-    });
-  };
-
-  const renderTag = ({ item: tag }: { item: Tag }) => {
-    // Le tag "Tous" a l'ID 0, c'est un cas spécial
-    const isAllTag = tag.id === 0;
-    const isSelected = isAllTag ? selectedTags.size === 0 : selectedTags.has(tag.id);
-    
-    return (
-      <TouchableOpacity
-        style={[
-          styles.tagChip,
-          isSelected && styles.tagChipSelected
-        ]}
-        onPress={() => {
-          if (isAllTag) {
-            // Si on clique sur "Tous", on vide la sélection et on désactive le filtre favoris
-            setSelectedTags(new Set());
-            setShowFavoritesOnly(false);
-          } else {
-            toggleTag(tag.id);
-          }
-        }}
-      >
-        <Text style={[
-          styles.tagText,
-          isSelected && styles.tagTextSelected
-        ]}>
-          {tag.name}
-        </Text>
-      </TouchableOpacity>
-    );
-  };
+  const renderTag = ({ item: tag }: { item: Tag }) => (
+    <TouchableOpacity
+      style={[
+        styles.tagChip,
+        selectedTag === tag.id && styles.tagChipSelected
+      ]}
+      onPress={() => setSelectedTag(selectedTag === tag.id ? null : tag.id)}
+    >
+      <Text style={[
+        styles.tagText,
+        selectedTag === tag.id && styles.tagTextSelected
+      ]}>
+        {tag.name}
+      </Text>
+    </TouchableOpacity>
+  );
 
   return (
     <View style={styles.container}>
@@ -245,34 +183,12 @@ export default function RecipePage() {
             <Text style={styles.title}>Mes Recettes</Text>
           </View>
           
-          <View style={styles.headerRight}>
-            <TouchableOpacity
-              style={[
-                styles.favoriteFilterButton,
-                showFavoritesOnly && styles.favoriteFilterButtonActive
-              ]}
-              onPress={() => {
-                setShowFavoritesOnly(!showFavoritesOnly);
-                // Quand on active le filtre favoris, on désélectionne tous les tags
-                if (!showFavoritesOnly) {
-                  setSelectedTags(new Set());
-                }
-              }}
-            >
-              <FontAwesome 
-                name={showFavoritesOnly ? "heart" : "heart-o"} 
-                size={20} 
-                color={showFavoritesOnly ? theme.colors.surface : theme.colors.primary} 
-              />
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={styles.searchButton}
-              onPress={() => {/* TODO: Implement search */}}
-            >
-              <FontAwesome name="search" size={20} color={theme.colors.primary} />
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={styles.searchButton}
+            onPress={() => {/* TODO: Implement search */}}
+          >
+            <FontAwesome name="search" size={20} color={theme.colors.primary} />
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -339,12 +255,6 @@ const styles = StyleSheet.create({
     gap: theme.spacing.md,
   },
   
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.sm,
-  },
-  
   backButton: {
     width: 44,
     height: 44,
@@ -368,20 +278,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     ...theme.shadows.small,
-  },
-  
-  favoriteFilterButton: {
-    width: 44,
-    height: 44,
-    borderRadius: theme.borderRadius.round,
-    backgroundColor: theme.colors.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...theme.shadows.small,
-  },
-  
-  favoriteFilterButtonActive: {
-    backgroundColor: theme.colors.primary,
   },
   
   filterSection: {

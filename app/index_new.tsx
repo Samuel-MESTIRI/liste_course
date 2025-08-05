@@ -1,12 +1,13 @@
 import { FontAwesome } from '@expo/vector-icons';
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { FlatList, Modal, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, FlatList, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Button } from "../src/components/Button";
 import { Card } from "../src/components/Card";
 import { Input } from "../src/components/Input";
-import { RecipeIngredientManager, RecipeManager, ShoppingListManager, IngredientManager } from "../src/services/storage";
+import { ShoppingListManager } from "../src/services/storage";
 import { theme } from "../src/styles/theme";
-import { Recipe, ShoppingListItem, Ingredient } from "../src/types";
+import { ShoppingListItem } from "../src/types";
 
 // Fonctions utilitaires pour les quantités et unités
 const formatQuantity = (quantity: number, unit: string): string => {
@@ -27,9 +28,6 @@ export default function ShoppingListPage() {
   const router = useRouter();
   const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>([]);
   const [newItem, setNewItem] = useState("");
-  const [modalVisible, setModalVisible] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<ShoppingListItem | null>(null);
-  const [recipesWithItem, setRecipesWithItem] = useState<Recipe[]>([]);
 
   useEffect(() => {
     loadShoppingList();
@@ -38,9 +36,7 @@ export default function ShoppingListPage() {
   const loadShoppingList = async () => {
     try {
       const list = await ShoppingListManager.getShoppingList();
-      // Trier la liste une seule fois au chargement
-      const sortedList = list.sort((a, b) => a.checked ? 1 : -1);
-      setShoppingList(sortedList);
+      setShoppingList(list);
     } catch (error) {
       console.error('Erreur lors du chargement de la liste:', error);
     }
@@ -71,10 +67,8 @@ export default function ShoppingListPage() {
       const updatedList = shoppingList.map(item => 
         item.id === id ? { ...item, checked: !item.checked } : item
       );
-      // Trier seulement quand on coche/décoche un élément
-      const sortedList = updatedList.sort((a, b) => a.checked ? 1 : -1);
-      setShoppingList(sortedList);
-      await ShoppingListManager.updateShoppingList(sortedList);
+      setShoppingList(updatedList);
+      await ShoppingListManager.updateShoppingList(updatedList);
     } catch (error) {
       console.error('Erreur lors de la mise à jour:', error);
     }
@@ -105,109 +99,64 @@ export default function ShoppingListPage() {
   };
 
   const deleteItem = async (id: number) => {
-    try {
-      const updatedList = shoppingList.filter(item => item.id !== id);
-      setShoppingList(updatedList);
-      await ShoppingListManager.updateShoppingList(updatedList);
-    } catch (error) {
-      console.error('Erreur lors de la suppression:', error);
-    }
-  };
-
-  const findRecipesWithIngredient = async (itemName: string): Promise<Recipe[]> => {
-    try {
-      // Récupérer tous les ingrédients
-      const allIngredients = await IngredientManager.getIngredients();
-      
-      // Trouver les ingrédients qui correspondent au nom de l'item (recherche flexible)
-      const matchingIngredients = allIngredients.filter((ingredient: Ingredient) => 
-        ingredient.name.toLowerCase().includes(itemName.toLowerCase()) ||
-        itemName.toLowerCase().includes(ingredient.name.toLowerCase())
-      );
-      
-      if (matchingIngredients.length === 0) {
-        return [];
-      }
-      
-      // Récupérer toutes les recettes
-      const allRecipes = await RecipeManager.getRecipes();
-      const recipesWithIngredient: Recipe[] = [];
-      
-      // Pour chaque recette, vérifier si elle contient un des ingrédients correspondants
-      for (const recipe of allRecipes) {
-        const recipeIngredients = await RecipeIngredientManager.getIngredientsForRecipe(recipe.id);
-        const hasMatchingIngredient = recipeIngredients.some(ri => 
-          matchingIngredients.some((mi: Ingredient) => mi.id === ri.ingredientId)
-        );
-        
-        if (hasMatchingIngredient) {
-          recipesWithIngredient.push(recipe);
+    Alert.alert(
+      "Supprimer l'article",
+      "Êtes-vous sûr de vouloir supprimer cet article ?",
+      [
+        { text: "Annuler", style: "cancel" },
+        {
+          text: "Supprimer",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const updatedList = shoppingList.filter(item => item.id !== id);
+              setShoppingList(updatedList);
+              await ShoppingListManager.updateShoppingList(updatedList);
+            } catch (error) {
+              console.error('Erreur lors de la suppression:', error);
+            }
+          }
         }
-      }
-      
-      return recipesWithIngredient;
-    } catch (error) {
-      console.error('Erreur lors de la recherche des recettes:', error);
-      return [];
-    }
-  };
-
-  const handleLongPress = async (item: ShoppingListItem) => {
-    setSelectedItem(item);
-    const recipes = await findRecipesWithIngredient(item.name);
-    setRecipesWithItem(recipes);
-    setModalVisible(true);
-  };
-
-  const closeModal = () => {
-    setModalVisible(false);
-    setSelectedItem(null);
-    setRecipesWithItem([]);
+      ]
+    );
   };
 
   const renderItem = ({ item }: { item: ShoppingListItem }) => (
     <Card style={styles.itemCard}>
-      <TouchableOpacity
-        style={styles.itemContainer}
-        onPress={() => toggleItem(item.id)}
-        onLongPress={() => handleLongPress(item)}
-        activeOpacity={0.7}
-      >
-        <View style={styles.checkboxContainer}>
+      <View style={styles.itemContainer}>
+        <TouchableOpacity
+          style={styles.checkboxContainer}
+          onPress={() => toggleItem(item.id)}
+        >
           <View style={[styles.checkbox, item.checked && styles.checkboxChecked]}>
             {item.checked && (
               <FontAwesome name="check" size={14} color={theme.colors.surface} />
             )}
           </View>
-        </View>
+        </TouchableOpacity>
         
         <View style={styles.itemContent}>
           <Text style={[styles.itemName, item.checked && styles.itemNameChecked]}>
             {item.name}
+          </Text>
+          <Text style={styles.itemQuantity}>
+            {formatQuantityWithUnit(item)}
           </Text>
         </View>
         
         <View style={styles.quantityControls}>
           <TouchableOpacity
             style={styles.quantityButton}
-            onPress={(e) => {
-              e.stopPropagation();
-              decrementQuantity(item.id);
-            }}
+            onPress={() => decrementQuantity(item.id)}
           >
             <FontAwesome name="minus" size={12} color={theme.colors.primary} />
           </TouchableOpacity>
           
-          <View style={styles.quantityDisplay}>
-            <Text style={styles.quantityText}>{item.quantity} {item.unit}</Text>
-          </View>
+          <Text style={styles.quantityText}>{item.quantity}</Text>
           
           <TouchableOpacity
             style={styles.quantityButton}
-            onPress={(e) => {
-              e.stopPropagation();
-              incrementQuantity(item.id);
-            }}
+            onPress={() => incrementQuantity(item.id)}
           >
             <FontAwesome name="plus" size={12} color={theme.colors.primary} />
           </TouchableOpacity>
@@ -215,14 +164,11 @@ export default function ShoppingListPage() {
         
         <TouchableOpacity
           style={styles.deleteButton}
-          onPress={(e) => {
-            e.stopPropagation();
-            deleteItem(item.id);
-          }}
+          onPress={() => deleteItem(item.id)}
         >
           <FontAwesome name="trash" size={16} color={theme.colors.error} />
         </TouchableOpacity>
-      </TouchableOpacity>
+      </View>
     </Card>
   );
 
@@ -245,85 +191,34 @@ export default function ShoppingListPage() {
 
       {/* Add Item Section */}
       <Card style={styles.addSection}>
-        <View style={styles.addItemContainer}>
+        <View style={styles.addInputContainer}>
           <Input
             value={newItem}
             onChangeText={setNewItem}
             placeholder="Ajouter un article..."
             variant="filled"
-            containerStyle={styles.addInputContainer}
+            style={styles.addInput}
             onSubmitEditing={addItem}
           />
-          <TouchableOpacity
-            style={styles.addButton}
+          <Button
+            title=""
+            icon="plus"
             onPress={addItem}
-            activeOpacity={0.8}
-          >
-            <FontAwesome name="plus" size={20} color={theme.colors.surface} />
-          </TouchableOpacity>
+            size="medium"
+            style={styles.addButton}
+          />
         </View>
       </Card>
 
       {/* Shopping List */}
       <FlatList
-        data={shoppingList}
+        data={shoppingList.sort((a, b) => a.checked ? 1 : -1)}
         renderItem={renderItem}
         keyExtractor={(item) => item.id.toString()}
         style={styles.list}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
       />
-
-      {/* Modal pour les recettes */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={modalVisible}
-        onRequestClose={closeModal}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                Recettes avec "{selectedItem?.name}"
-              </Text>
-              <TouchableOpacity
-                style={styles.modalCloseButton}
-                onPress={closeModal}
-              >
-                <FontAwesome name="times" size={20} color={theme.colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-            
-            {recipesWithItem.length > 0 ? (
-              <FlatList
-                data={recipesWithItem}
-                keyExtractor={(item) => item.id.toString()}
-                renderItem={({ item: recipe }) => (
-                  <TouchableOpacity
-                    style={styles.recipeItem}
-                    onPress={() => {
-                      closeModal();
-                      router.push(`/modifier-recette/${recipe.id}`);
-                    }}
-                  >
-                    <Text style={styles.recipeItemName}>{recipe.name}</Text>
-                    <FontAwesome name="chevron-right" size={16} color={theme.colors.textSecondary} />
-                  </TouchableOpacity>
-                )}
-                showsVerticalScrollIndicator={false}
-              />
-            ) : (
-              <View style={styles.noRecipesContainer}>
-                <FontAwesome name="search" size={32} color={theme.colors.textLight} />
-                <Text style={styles.noRecipesText}>
-                  Aucune recette trouvée avec cet ingrédient
-                </Text>
-              </View>
-            )}
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -368,13 +263,13 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.md,
   },
   
-  addItemContainer: {
+  addInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing.md,
   },
   
-  addInputContainer: {
+  addInput: {
     flex: 1,
     marginBottom: 0,
   },
@@ -383,10 +278,6 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: theme.borderRadius.round,
-    backgroundColor: theme.colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...theme.shadows.small,
   },
   
   list: {
@@ -442,15 +333,16 @@ const styles = StyleSheet.create({
     color: theme.colors.textSecondary,
   },
   
+  itemQuantity: {
+    ...theme.typography.bodySmall,
+    color: theme.colors.textSecondary,
+    marginTop: 2,
+  },
+  
   quantityControls: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing.md,
-  },
-  
-  quantityDisplay: {
-    alignItems: 'center',
-    minWidth: 40,
   },
   
   quantityButton: {
@@ -468,74 +360,11 @@ const styles = StyleSheet.create({
     ...theme.typography.body,
     color: theme.colors.text,
     fontWeight: '600',
+    minWidth: 24,
     textAlign: 'center',
   },
   
   deleteButton: {
     padding: theme.spacing.sm,
-  },
-  
-  // Styles pour la modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  
-  modalContent: {
-    backgroundColor: theme.colors.surface,
-    borderTopLeftRadius: theme.borderRadius.lg,
-    borderTopRightRadius: theme.borderRadius.lg,
-    maxHeight: '70%',
-    padding: theme.spacing.lg,
-  },
-  
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: theme.spacing.lg,
-    paddingBottom: theme.spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.borderLight,
-  },
-  
-  modalTitle: {
-    ...theme.typography.h3,
-    color: theme.colors.text,
-    flex: 1,
-  },
-  
-  modalCloseButton: {
-    padding: theme.spacing.sm,
-  },
-  
-  recipeItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.md,
-    backgroundColor: theme.colors.background,
-    borderRadius: theme.borderRadius.md,
-    marginBottom: theme.spacing.sm,
-  },
-  
-  recipeItemName: {
-    ...theme.typography.body,
-    color: theme.colors.text,
-    flex: 1,
-  },
-  
-  noRecipesContainer: {
-    alignItems: 'center',
-    paddingVertical: theme.spacing.xl,
-  },
-  
-  noRecipesText: {
-    ...theme.typography.body,
-    color: theme.colors.textSecondary,
-    textAlign: 'center',
-    marginTop: theme.spacing.md,
   },
 });

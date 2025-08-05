@@ -130,6 +130,12 @@ export const RecipeTagManager = {
 export const ShoppingListManager = {
   getShoppingList: () => getItem<ShoppingListItem>(STORAGE_KEYS.SHOPPING_LIST),
   saveShoppingList: (items: ShoppingListItem[]) => setItem(STORAGE_KEYS.SHOPPING_LIST, items),
+  updateShoppingList: (items: ShoppingListItem[]) => setItem(STORAGE_KEYS.SHOPPING_LIST, items),
+  addItem: async (item: ShoppingListItem) => {
+    const currentList = await getItem<ShoppingListItem>(STORAGE_KEYS.SHOPPING_LIST);
+    currentList.push(item);
+    await setItem(STORAGE_KEYS.SHOPPING_LIST, currentList);
+  },
   addRecipeToShoppingList: async (recipeId: number) => {
     const recipeIngredients = await RecipeIngredientManager.getIngredientsForRecipe(recipeId);
     const currentList = await getItem<ShoppingListItem>(STORAGE_KEYS.SHOPPING_LIST);
