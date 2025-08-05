@@ -1,7 +1,8 @@
 import { FontAwesome } from '@expo/vector-icons';
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
-import { FlatList, Modal, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { useEffect, useState } from "react";
+import { Animated, FlatList, Modal, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { Card } from "../src/components/Card";
 import { Input } from "../src/components/Input";
 import { IngredientManager, RecipeIngredientManager, RecipeManager, ShoppingListManager } from "../src/services/storage";
@@ -20,7 +21,83 @@ const formatQuantity = (quantity: number, unit: string): string => {
 };
 
 const formatQuantityWithUnit = (item: ShoppingListItem): string => {
-  return formatQuantity(item.quantity, item.unit);
+  return formatQuantity(item.quantity, item.unit || 'u');
+};
+
+// Composant pour gérer le swipe
+const SwipeableItem = ({ 
+  children, 
+  onDelete 
+}: { 
+  children: React.ReactNode; 
+  onDelete: () => void; 
+}) => {
+  const translateX = new Animated.Value(0);
+
+  const onGestureEvent = Animated.event(
+    [{ nativeEvent: { translationX: translateX } }],
+    { 
+      useNativeDriver: true,
+      listener: (event: any) => {
+        // Limiter le swipe uniquement vers la gauche
+        if (event.nativeEvent.translationX > 0) {
+          translateX.setValue(0);
+        }
+      }
+    }
+  );
+
+  const onHandlerStateChange = (event: any) => {
+    if (event.nativeEvent.state === State.END) {
+      const { translationX } = event.nativeEvent;
+      
+      // Seulement traiter les swipes vers la gauche
+      if (translationX < -100) {
+        // Swipe assez loin pour supprimer
+        Animated.timing(translateX, {
+          toValue: -300,
+          duration: 200,
+          useNativeDriver: true,
+        }).start(() => {
+          onDelete();
+        });
+      } else {
+        // Revenir à la position initiale
+        Animated.spring(translateX, {
+          toValue: 0,
+          useNativeDriver: true,
+        }).start();
+      }
+    }
+  };
+
+  return (
+    <View style={styles.swipeContainer}>
+      {/* Fond de suppression */}
+      <View style={styles.deleteBackground}>
+        <FontAwesome name="trash" size={20} color={theme.colors.surface} />
+        <Text style={styles.deleteText}>Supprimer</Text>
+      </View>
+      
+      {/* Élément principal */}
+      <PanGestureHandler
+        onGestureEvent={onGestureEvent}
+        onHandlerStateChange={onHandlerStateChange}
+        activeOffsetX={-10}
+        failOffsetX={10}
+        failOffsetY={[-20, 20]}
+      >
+        <Animated.View
+          style={[
+            styles.swipeableContent,
+            { transform: [{ translateX }] }
+          ]}
+        >
+          {children}
+        </Animated.View>
+      </PanGestureHandler>
+    </View>
+  );
 };
 
 export default function ShoppingListPage() {
@@ -82,9 +159,16 @@ export default function ShoppingListPage() {
 
   const incrementQuantity = async (id: number) => {
     try {
-      const updatedList = shoppingList.map(item => 
-        item.id === id ? { ...item, quantity: item.quantity + 1 } : item
-      );
+      const updatedList = shoppingList.map(item => {
+        if (item.id === id) {
+          let increment = 1; // Par défaut pour 'u'
+          if (item.unit === 'g') increment = 100;
+          else if (item.unit === 'cl') increment = 10;
+          
+          return { ...item, quantity: item.quantity + increment };
+        }
+        return item;
+      });
       setShoppingList(updatedList);
       await ShoppingListManager.updateShoppingList(updatedList);
     } catch (error) {
@@ -94,9 +178,16 @@ export default function ShoppingListPage() {
 
   const decrementQuantity = async (id: number) => {
     try {
-      const updatedList = shoppingList.map(item => 
-        item.id === id ? { ...item, quantity: Math.max(1, item.quantity - 1) } : item
-      );
+      const updatedList = shoppingList.map(item => {
+        if (item.id === id) {
+          let decrement = 1; // Par défaut pour 'u'
+          if (item.unit === 'g') decrement = 100;
+          else if (item.unit === 'cl') decrement = 10;
+          
+          return { ...item, quantity: Math.max(decrement, item.quantity - decrement) };
+        }
+        return item;
+      });
       setShoppingList(updatedList);
       await ShoppingListManager.updateShoppingList(updatedList);
     } catch (error) {
@@ -166,64 +257,56 @@ export default function ShoppingListPage() {
   };
 
   const renderItem = ({ item }: { item: ShoppingListItem }) => (
-    <Card style={styles.itemCard}>
-      <TouchableOpacity
-        style={styles.itemContainer}
-        onPress={() => toggleItem(item.id)}
-        onLongPress={() => handleLongPress(item)}
-        activeOpacity={0.7}
-      >
-        <View style={styles.checkboxContainer}>
-          <View style={[styles.checkbox, item.checked && styles.checkboxChecked]}>
-            {item.checked && (
-              <FontAwesome name="check" size={14} color={theme.colors.surface} />
-            )}
-          </View>
-        </View>
-        
-        <View style={styles.itemContent}>
-          <Text style={[styles.itemName, item.checked && styles.itemNameChecked]}>
-            {item.name}
-          </Text>
-        </View>
-        
-        <View style={styles.quantityControls}>
-          <TouchableOpacity
-            style={styles.quantityButton}
-            onPress={(e) => {
-              e.stopPropagation();
-              decrementQuantity(item.id);
-            }}
-          >
-            <FontAwesome name="minus" size={12} color={theme.colors.primary} />
-          </TouchableOpacity>
-          
-          <View style={styles.quantityDisplay}>
-            <Text style={styles.quantityText}>{item.quantity} {item.unit}</Text>
-          </View>
-          
-          <TouchableOpacity
-            style={styles.quantityButton}
-            onPress={(e) => {
-              e.stopPropagation();
-              incrementQuantity(item.id);
-            }}
-          >
-            <FontAwesome name="plus" size={12} color={theme.colors.primary} />
-          </TouchableOpacity>
-        </View>
-        
+    <SwipeableItem onDelete={() => deleteItem(item.id)}>
+      <Card style={styles.itemCard}>
         <TouchableOpacity
-          style={styles.deleteButton}
-          onPress={(e) => {
-            e.stopPropagation();
-            deleteItem(item.id);
-          }}
+          style={styles.itemContainer}
+          onPress={() => toggleItem(item.id)}
+          onLongPress={() => handleLongPress(item)}
+          activeOpacity={0.7}
         >
-          <FontAwesome name="trash" size={16} color={theme.colors.error} />
+          <View style={styles.checkboxContainer}>
+            <View style={[styles.checkbox, item.checked && styles.checkboxChecked]}>
+              {item.checked && (
+                <FontAwesome name="check" size={14} color={theme.colors.surface} />
+              )}
+            </View>
+          </View>
+          
+          <View style={styles.itemContent}>
+            <Text style={[styles.itemName, item.checked && styles.itemNameChecked]}>
+              {item.name}
+            </Text>
+          </View>
+          
+          <View style={styles.quantityControls}>
+            <TouchableOpacity
+              style={styles.quantityButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                decrementQuantity(item.id);
+              }}
+            >
+              <FontAwesome name="minus" size={12} color={theme.colors.primary} />
+            </TouchableOpacity>
+            
+            <View style={styles.quantityDisplay}>
+              <Text style={styles.quantityText}>{formatQuantity(item.quantity, item.unit || 'u')}</Text>
+            </View>
+            
+            <TouchableOpacity
+              style={styles.quantityButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                incrementQuantity(item.id);
+              }}
+            >
+              <FontAwesome name="plus" size={12} color={theme.colors.primary} />
+            </TouchableOpacity>
+          </View>
         </TouchableOpacity>
-      </TouchableOpacity>
-    </Card>
+      </Card>
+    </SwipeableItem>
   );
 
   return (
@@ -281,8 +364,16 @@ export default function ShoppingListPage() {
         visible={modalVisible}
         onRequestClose={closeModal}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={closeModal}
+        >
+          <TouchableOpacity
+            style={styles.modalContent}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
                 Recettes avec "{selectedItem?.name}"
@@ -321,8 +412,8 @@ export default function ShoppingListPage() {
                 </Text>
               </View>
             )}
-          </View>
-        </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
     </View>
   );
@@ -399,7 +490,7 @@ const styles = StyleSheet.create({
   },
   
   itemCard: {
-    marginBottom: theme.spacing.md,
+    marginBottom: 0,
   },
   
   itemContainer: {
@@ -445,17 +536,17 @@ const styles = StyleSheet.create({
   quantityControls: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.md,
+    gap: theme.spacing.sm,
   },
   
   quantityDisplay: {
     alignItems: 'center',
-    minWidth: 40,
+    minWidth: 32,
   },
   
   quantityButton: {
-    width: 32,
-    height: 32,
+    width: 28,
+    height: 28,
     borderRadius: theme.borderRadius.sm,
     backgroundColor: theme.colors.background,
     justifyContent: 'center',
@@ -465,14 +556,47 @@ const styles = StyleSheet.create({
   },
   
   quantityText: {
-    ...theme.typography.body,
+    ...theme.typography.bodySmall,
     color: theme.colors.text,
     fontWeight: '600',
     textAlign: 'center',
+    fontSize: 12,
   },
   
   deleteButton: {
     padding: theme.spacing.sm,
+  },
+  
+  // Styles pour le swipe
+  swipeContainer: {
+    position: 'relative',
+    marginBottom: theme.spacing.md,
+  },
+  
+  deleteBackground: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: theme.colors.error,
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    paddingHorizontal: theme.spacing.xl,
+    borderRadius: theme.borderRadius.md,
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+  },
+  
+  deleteText: {
+    color: theme.colors.surface,
+    ...theme.typography.bodySmall,
+    fontWeight: '600',
+  },
+  
+  swipeableContent: {
+    backgroundColor: theme.colors.background,
+    borderRadius: theme.borderRadius.md,
   },
   
   // Styles pour la modal

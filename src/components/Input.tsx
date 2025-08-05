@@ -1,5 +1,5 @@
 import { FontAwesome } from '@expo/vector-icons';
-import React from 'react';
+import React, { forwardRef } from 'react';
 import { StyleSheet, Text, TextInput, TextInputProps, TextStyle, View } from 'react-native';
 import { theme } from '../styles/theme';
 
@@ -12,7 +12,7 @@ interface InputProps extends Omit<TextInputProps, 'style'> {
   containerStyle?: any;
 }
 
-export const Input: React.FC<InputProps> = ({
+export const Input = forwardRef<TextInput, InputProps>(({
   label,
   error,
   icon,
@@ -20,7 +20,7 @@ export const Input: React.FC<InputProps> = ({
   style,
   containerStyle,
   ...props
-}) => {
+}, ref) => {
   const inputStyle = [
     styles.base,
     styles[variant],
@@ -42,6 +42,7 @@ export const Input: React.FC<InputProps> = ({
           />
         )}
         <TextInput
+          ref={ref}
           style={inputStyle}
           placeholderTextColor={theme.colors.textLight}
           {...props}
@@ -50,7 +51,7 @@ export const Input: React.FC<InputProps> = ({
       {error && <Text style={styles.errorText}>{error}</Text>}
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {

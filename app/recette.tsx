@@ -1,9 +1,10 @@
 import { FontAwesome } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
-import { FlatList, Image, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Animated, FlatList, Image, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { Button } from "../src/components/Button";
 import { Card } from "../src/components/Card";
+import { Input } from "../src/components/Input";
 import { FavoriteManager, RecipeManager, RecipeTagManager, ShoppingListManager, TagManager } from "../src/services/storage";
 import { theme } from "../src/styles/theme";
 import { Recipe, Tag } from "../src/types";
@@ -15,8 +16,24 @@ export default function RecipePage() {
   const [selectedTags, setSelectedTags] = useState<Set<number>>(new Set());
   const [favorites, setFavorites] = useState<Set<number>>(new Set());
   const [showFavoritesOnly, setShowFavoritesOnly] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [showSearchInput, setShowSearchInput] = useState<boolean>(false);
+  const [foodAnimations, setFoodAnimations] = useState<{[key: number]: boolean}>({});
+  const [favoriteAnimations, setFavoriteAnimations] = useState<{[key: number]: boolean}>({});
 
   const [filteredRecipes, setFilteredRecipes] = useState<Recipe[]>([]);
+  
+  // Animation pour le champ de recherche
+  const searchAnimation = useRef(new Animated.Value(0)).current;
+  
+  // Référence pour le champ de recherche
+  const searchInputRef = useRef<TextInput>(null);
+
+  // Animations pour les icônes de nourriture
+  const foodAnimationRefs = useRef<{[key: number]: Animated.Value[]}>({});
+  
+  // Animations pour les favoris
+  const favoriteAnimationRefs = useRef<{[key: number]: Animated.Value}>({});
 
   useEffect(() => {
     loadRecipes();
@@ -34,7 +51,7 @@ export default function RecipePage() {
 
   useEffect(() => {
     filterRecipes();
-  }, [recipes, selectedTags, showFavoritesOnly]);
+  }, [recipes, selectedTags, showFavoritesOnly, searchQuery]);
 
   const filterRecipes = async () => {
     let filtered = recipes;
@@ -42,6 +59,14 @@ export default function RecipePage() {
     // Filtre par favoris si activé
     if (showFavoritesOnly) {
       filtered = filtered.filter(recipe => favorites.has(recipe.id));
+    }
+
+    // Filtre par recherche textuelle
+    if (searchQuery.trim() !== '') {
+      filtered = filtered.filter(recipe =>
+        recipe.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (recipe.description && recipe.description.toLowerCase().includes(searchQuery.toLowerCase()))
+      );
     }
 
     // Filtre par tags si des tags sont sélectionnés
@@ -98,15 +123,47 @@ export default function RecipePage() {
       await ShoppingListManager.addRecipeToShoppingList(recipeId);
       console.log('Recette ajoutée à la liste de courses avec succès');
       
-      // Recharger la liste de courses pour voir si les éléments ont été ajoutés
-      router.push('/');
+      // Déclencher l'animation des icônes de nourriture
+      triggerFoodAnimation(recipeId);
     } catch (error) {
       console.error('Erreur lors de l\'ajout à la liste:', error);
     }
   };
 
+  const triggerFavoriteAnimation = (recipeId: number) => {
+    // Créer l'animation pour ce favori si elle n'existe pas
+    if (!favoriteAnimationRefs.current[recipeId]) {
+      favoriteAnimationRefs.current[recipeId] = new Animated.Value(1);
+    }
+
+    // Afficher l'animation pour cette recette
+    setFavoriteAnimations(prev => ({ ...prev, [recipeId]: true }));
+
+    const animation = favoriteAnimationRefs.current[recipeId];
+    
+    // Animation de pulsation
+    Animated.sequence([
+      Animated.timing(animation, {
+        toValue: 1.5,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+      Animated.timing(animation, {
+        toValue: 1,
+        duration: 150,
+        useNativeDriver: true,
+      })
+    ]).start(() => {
+      // Cacher l'animation après
+      setFavoriteAnimations(prev => ({ ...prev, [recipeId]: false }));
+    });
+  };
+
   const toggleFavorite = async (recipeId: number) => {
     try {
+      // Déclencher l'animation avant de changer l'état
+      triggerFavoriteAnimation(recipeId);
+      
       if (favorites.has(recipeId)) {
         await FavoriteManager.removeFavorite(recipeId);
         setFavorites(prev => {
@@ -127,61 +184,178 @@ export default function RecipePage() {
     return filteredRecipes;
   };
 
-  const renderRecipe = ({ item: recipe }: { item: Recipe }) => (
-    <Card style={styles.recipeCard}>
-      <TouchableOpacity
-        style={styles.recipeContent}
-        onPress={() => router.push(`/modifier-recette/${recipe.id}`)}
-      >
-        {recipe.imageUri ? (
-          <Image
-            source={{ uri: recipe.imageUri }}
-            style={styles.recipeImage}
-            resizeMode="cover"
-          />
-        ) : (
-          <View style={styles.recipePlaceholder}>
-            <FontAwesome name="image" size={32} color={theme.colors.textLight} />
-          </View>
-        )}
-        
-        <View style={styles.recipeInfo}>
-          <View style={styles.recipeHeader}>
-            <Text style={styles.recipeTitle} numberOfLines={2}>
-              {recipe.name}
-            </Text>
-            <TouchableOpacity
-              style={styles.favoriteButton}
-              onPress={() => toggleFavorite(recipe.id)}
-            >
-              <FontAwesome
-                name={favorites.has(recipe.id) ? "heart" : "heart-o"}
-                size={20}
-                color={favorites.has(recipe.id) ? theme.colors.error : theme.colors.textSecondary}
+  const triggerFoodAnimation = (recipeId: number) => {
+    // Créer les animations pour les 3 icônes si elles n'existent pas
+    if (!foodAnimationRefs.current[recipeId]) {
+      foodAnimationRefs.current[recipeId] = [
+        new Animated.Value(0),
+        new Animated.Value(0),
+        new Animated.Value(0)
+      ];
+    }
+
+    // Afficher les icônes pour cette recette
+    setFoodAnimations(prev => ({ ...prev, [recipeId]: true }));
+
+    const animations = foodAnimationRefs.current[recipeId];
+    
+    // Lancer les animations en parallèle avec des délais différents
+    Animated.stagger(120, animations.map((anim, index) => 
+      Animated.sequence([
+        Animated.delay(index * 80),
+        Animated.timing(anim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        })
+      ])
+    )).start(() => {
+      // Cacher les icônes après l'animation
+      setFoodAnimations(prev => ({ ...prev, [recipeId]: false }));
+      // Réinitialiser les animations
+      animations.forEach(anim => anim.setValue(0));
+    });
+  };
+
+  const renderRecipe = ({ item: recipe }: { item: Recipe }) => {
+    const foodEmojis = ['🥕', '🥩', '🍎']; // Carotte, Viande, Pomme
+    const showAnimation = foodAnimations[recipe.id];
+    const animations = foodAnimationRefs.current[recipe.id] || [];
+    const showFavoriteAnimation = favoriteAnimations[recipe.id];
+    const favoriteAnimation = favoriteAnimationRefs.current[recipe.id];
+
+    return (
+      <View style={styles.recipeCardContainer}>
+        <Card style={styles.recipeCard}>
+          <TouchableOpacity
+            style={styles.recipeContent}
+            onPress={() => router.push(`/modifier-recette/${recipe.id}`)}
+          >
+            {recipe.imageUri ? (
+              <Image
+                source={{ uri: recipe.imageUri }}
+                style={styles.recipeImage}
+                resizeMode="cover"
               />
-            </TouchableOpacity>
-          </View>
-          
-          {recipe.description && (
-            <Text style={styles.recipeDescription} numberOfLines={2}>
-              {recipe.description}
+            ) : (
+              <View style={styles.recipePlaceholder}>
+                <FontAwesome name="image" size={32} color={theme.colors.textLight} />
+              </View>
+            )}
+            
+            <View style={styles.recipeInfo}>
+              <View style={styles.recipeHeader}>
+                <Text style={styles.recipeTitle} numberOfLines={2}>
+                  {recipe.name}
+                </Text>
+                <Animated.View
+                  style={{
+                    transform: [
+                      {
+                        scale: showFavoriteAnimation && favoriteAnimation 
+                          ? favoriteAnimation 
+                          : 1
+                      }
+                    ]
+                  }}
+                >
+                  <TouchableOpacity
+                    style={styles.favoriteButton}
+                    onPress={() => toggleFavorite(recipe.id)}
+                  >
+                    <FontAwesome
+                      name={favorites.has(recipe.id) ? "heart" : "heart-o"}
+                      size={20}
+                      color={favorites.has(recipe.id) ? theme.colors.error : theme.colors.textSecondary}
+                    />
+                  </TouchableOpacity>
+                </Animated.View>
+              </View>
+              
+              {recipe.description && (
+                <Text style={styles.recipeDescription} numberOfLines={2}>
+                  {recipe.description}
+                </Text>
+              )}
+              
+              <View style={styles.recipeActions}>            
+                <Button
+                  title="Ajouter"
+                  icon="cart-plus"
+                  variant="primary"
+                  size="small"
+                  onPress={() => addToShoppingList(recipe.id)}
+                  style={styles.addToListButton}
+                />
+              </View>
+            </View>
+          </TouchableOpacity>
+        </Card>
+
+        {/* Animation des icônes de nourriture */}
+        {showAnimation && animations.map((anim, index) => (
+          <Animated.View
+            key={index}
+            style={[
+              styles.foodIcon,
+              {
+                transform: [
+                  {
+                    translateX: anim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, -300],
+                    }),
+                  },
+                  {
+                    translateY: anim.interpolate({
+                      inputRange: [0, 0.5, 1],
+                      outputRange: [0, -50, 0],
+                    }),
+                  },
+                  {
+                    scale: anim.interpolate({
+                      inputRange: [0, 0.2, 0.8, 1],
+                      outputRange: [0.5, 1.2, 1, 0.8],
+                    }),
+                  },
+                ],
+                opacity: anim.interpolate({
+                  inputRange: [0, 0.2, 0.8, 1],
+                  outputRange: [0, 1, 1, 0],
+                }),
+              },
+            ]}
+          >
+            <Text style={styles.foodEmoji}>
+              {foodEmojis[index]}
             </Text>
-          )}
-          
-          <View style={styles.recipeActions}>            
-            <Button
-              title="Ajouter"
-              icon="shopping-cart"
-              variant="primary"
-              size="small"
-              onPress={() => addToShoppingList(recipe.id)}
-              style={styles.addToListButton}
-            />
-          </View>
-        </View>
-      </TouchableOpacity>
-    </Card>
-  );
+          </Animated.View>
+        ))}
+      </View>
+    );
+  };
+
+  const toggleSearch = () => {
+    const toValue = showSearchInput ? 0 : 1;
+    
+    setShowSearchInput(!showSearchInput);
+    
+    Animated.timing(searchAnimation, {
+      toValue,
+      duration: 300,
+      useNativeDriver: false,
+    }).start(() => {
+      if (toValue === 0) {
+        // Si on ferme la recherche, vider le texte de recherche
+        setSearchQuery('');
+      } else {
+        // Si on ouvre la recherche, focus sur le champ
+        setTimeout(() => {
+          searchInputRef.current?.focus();
+        }, 50);
+      }
+    });
+  };
 
   const toggleTag = (tagId: number) => {
     setSelectedTags(prev => {
@@ -268,13 +442,37 @@ export default function RecipePage() {
             
             <TouchableOpacity
               style={styles.searchButton}
-              onPress={() => {/* TODO: Implement search */}}
+              onPress={toggleSearch}
             >
               <FontAwesome name="search" size={20} color={theme.colors.primary} />
             </TouchableOpacity>
           </View>
         </View>
       </View>
+
+      {/* Search Input avec Animation */}
+      <Animated.View 
+        style={[
+          styles.searchContainer,
+          {
+            height: searchAnimation.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0, 80],
+            }),
+            opacity: searchAnimation,
+          }
+        ]}
+      >
+        <Input
+          ref={searchInputRef}
+          placeholder="Rechercher une recette..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          icon="search"
+          style={styles.searchInput}
+          containerStyle={styles.searchInputContainer}
+        />
+      </Animated.View>
 
       {/* Tags Filter */}
       {tags.length > 0 && (
@@ -430,6 +628,11 @@ const styles = StyleSheet.create({
     gap: theme.spacing.md,
   },
   
+  recipeCardContainer: {
+    flex: 1,
+    position: 'relative',
+  },
+  
   recipeCard: {
     flex: 1,
     marginBottom: theme.spacing.md,
@@ -503,6 +706,38 @@ const styles = StyleSheet.create({
   addToListButton: {
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.sm,
+  },
+  
+  searchContainer: {
+    overflow: 'hidden',
+    backgroundColor: theme.colors.background,
+    paddingBottom: theme.spacing.sm,
+  },
+  
+  searchInputContainer: {
+    marginHorizontal: theme.spacing.lg,
+    marginTop: theme.spacing.md,
+  },
+  
+  searchInput: {
+    fontSize: 16,
+  },
+  
+  foodIcon: {
+    position: 'absolute',
+    top: '50%',
+    right: '20%',
+    zIndex: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 20,
+    padding: theme.spacing.sm,
+    ...theme.shadows.small,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  
+  foodEmoji: {
+    fontSize: 24,
   },
   
   fab: {
