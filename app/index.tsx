@@ -4,9 +4,9 @@ import { useEffect, useState } from "react";
 import { FlatList, Modal, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Card } from "../src/components/Card";
 import { Input } from "../src/components/Input";
-import { RecipeIngredientManager, RecipeManager, ShoppingListManager, IngredientManager } from "../src/services/storage";
+import { IngredientManager, RecipeIngredientManager, RecipeManager, ShoppingListManager } from "../src/services/storage";
 import { theme } from "../src/styles/theme";
-import { Recipe, ShoppingListItem, Ingredient } from "../src/types";
+import { Ingredient, Recipe, ShoppingListItem } from "../src/types";
 
 // Fonctions utilitaires pour les quantités et unités
 const formatQuantity = (quantity: number, unit: string): string => {
