@@ -49,6 +49,22 @@ export const RecipeManager = {
     }
     return migratedRecipes;
   },
+  getRecipe: async (id: number): Promise<Recipe | null> => {
+    const recipes = await getItem<Recipe>(STORAGE_KEYS.RECIPES);
+    const recipe = recipes.find(recipe => recipe.id === id);
+    // Migration: ajouter le champ steps si il n'existe pas
+    if (recipe && !recipe.steps) {
+      const migratedRecipe = { ...recipe, steps: [] };
+      // Sauvegarder la recette migrée
+      const index = recipes.findIndex(r => r.id === id);
+      if (index !== -1) {
+        recipes[index] = migratedRecipe;
+        await setItem(STORAGE_KEYS.RECIPES, recipes);
+      }
+      return migratedRecipe;
+    }
+    return recipe || null;
+  },
   saveRecipe: async (recipe: Recipe) => {
     const recipes = await getItem<Recipe>(STORAGE_KEYS.RECIPES);
     const index = recipes.findIndex(r => r.id === recipe.id);
@@ -91,6 +107,10 @@ export const RecipeManager = {
 // Gestionnaire d'ingrédients
 export const IngredientManager = {
   getIngredients: () => getItem<Ingredient>(STORAGE_KEYS.INGREDIENTS),
+  getIngredient: async (id: number): Promise<Ingredient | null> => {
+    const ingredients = await getItem<Ingredient>(STORAGE_KEYS.INGREDIENTS);
+    return ingredients.find(ingredient => ingredient.id === id) || null;
+  },
   saveIngredient: async (ingredient: Ingredient) => {
     const ingredients = await getItem<Ingredient>(STORAGE_KEYS.INGREDIENTS);
     ingredients.push(ingredient);
@@ -137,6 +157,10 @@ export const TagManager = {
   getTags: async (): Promise<Tag[]> => {
     // Retourner toujours les tags prédéfinis
     return PREDEFINED_TAGS;
+  },
+  getTag: async (id: number): Promise<Tag | null> => {
+    const tags = await TagManager.getTags();
+    return tags.find(tag => tag.id === id) || null;
   },
   initializeTags: async () => {
     // Initialiser les tags prédéfinis s'ils n'existent pas déjà

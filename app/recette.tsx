@@ -229,7 +229,7 @@ export default function RecipePage() {
         <Card style={styles.recipeCard}>
           <TouchableOpacity
             style={styles.recipeContent}
-            onPress={() => router.push(`/modifier-recette/${recipe.id}`)}
+            onPress={() => router.push(`/fiche-recette/${recipe.id}`)}
           >
             {recipe.imageUri ? (
               <Image
