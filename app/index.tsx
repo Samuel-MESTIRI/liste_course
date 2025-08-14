@@ -1,6 +1,6 @@
 import { FontAwesome } from '@expo/vector-icons';
-import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useState } from "react";
 import { Animated, FlatList, Modal, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { Card } from "../src/components/Card";
@@ -111,6 +111,13 @@ export default function ShoppingListPage() {
   useEffect(() => {
     loadShoppingList();
   }, []);
+
+  // Recharger la liste à chaque fois qu'on revient sur la page
+  useFocusEffect(
+    useCallback(() => {
+      loadShoppingList();
+    }, [])
+  );
 
   const loadShoppingList = async () => {
     try {
