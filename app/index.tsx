@@ -105,6 +105,7 @@ export default function ShoppingListPage() {
   const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>([]);
   const [newItem, setNewItem] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
+  const [clearModalVisible, setClearModalVisible] = useState(false);
   const [selectedItem, setSelectedItem] = useState<ShoppingListItem | null>(null);
   const [recipesWithItem, setRecipesWithItem] = useState<Recipe[]>([]);
 
@@ -210,6 +211,24 @@ export default function ShoppingListPage() {
     } catch (error) {
       console.error('Erreur lors de la suppression:', error);
     }
+  };
+
+  const clearAllItems = async () => {
+    try {
+      setShoppingList([]);
+      await ShoppingListManager.updateShoppingList([]);
+      setClearModalVisible(false);
+    } catch (error) {
+      console.error('Erreur lors du vidage de la liste:', error);
+    }
+  };
+
+  const confirmClearList = () => {
+    setClearModalVisible(true);
+  };
+
+  const cancelClearList = () => {
+    setClearModalVisible(false);
   };
 
   const findRecipesWithIngredient = async (itemName: string): Promise<Recipe[]> => {
@@ -323,13 +342,26 @@ export default function ShoppingListPage() {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
-          <Text style={styles.title}>Ma Liste de Courses</Text>
-          <TouchableOpacity
-            style={styles.recipeButton}
-            onPress={() => router.push("/recette")}
-          >
-            <FontAwesome name="book" size={20} color={theme.colors.primary} />
-          </TouchableOpacity>
+          <Text style={styles.title}>Listy</Text>
+          <View style={styles.headerButtons}>
+            <TouchableOpacity
+              style={styles.clearButton}
+              onPress={confirmClearList}
+              disabled={shoppingList.length === 0}
+            >
+              <FontAwesome 
+                name="trash" 
+                size={20} 
+                color={shoppingList.length === 0 ? theme.colors.textLight : theme.colors.error} 
+              />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.recipeButton}
+              onPress={() => router.push("/recette")}
+            >
+              <FontAwesome name="book" size={20} color={theme.colors.primary} />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
@@ -419,6 +451,60 @@ export default function ShoppingListPage() {
                 </Text>
               </View>
             )}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Modal de confirmation pour vider la liste */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={clearModalVisible}
+        onRequestClose={cancelClearList}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={cancelClearList}
+        >
+          <TouchableOpacity
+            style={styles.modalContent}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                Vider la liste de courses
+              </Text>
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={cancelClearList}
+              >
+                <FontAwesome name="times" size={20} color={theme.colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.confirmationContent}>
+              <Text style={styles.confirmationText}>
+                Êtes-vous sûr de vouloir vider complètement votre liste de courses ? Cette action est irréversible.
+              </Text>
+              
+              <View style={styles.confirmationButtons}>
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={cancelClearList}
+                >
+                  <Text style={styles.cancelButtonText}>Annuler</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={styles.confirmButton}
+                  onPress={clearAllItems}
+                >
+                  <Text style={styles.confirmButtonText}>Vider la liste</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
@@ -668,5 +754,65 @@ const styles = StyleSheet.create({
     color: theme.colors.textSecondary,
     textAlign: 'center',
     marginTop: theme.spacing.md,
+  },
+  
+  headerButtons: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+  },
+  
+  clearButton: {
+    padding: theme.spacing.sm,
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  
+  confirmationContent: {
+    padding: theme.spacing.lg,
+  },
+  
+  confirmationText: {
+    ...theme.typography.body,
+    color: theme.colors.text,
+    textAlign: 'center',
+    marginBottom: theme.spacing.xl,
+    lineHeight: 22,
+  },
+  
+  confirmationButtons: {
+    flexDirection: 'row',
+    gap: theme.spacing.md,
+  },
+  
+  cancelButton: {
+    flex: 1,
+    padding: theme.spacing.md,
+    backgroundColor: theme.colors.background,
+    borderRadius: theme.borderRadius.md,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  
+  confirmButton: {
+    flex: 1,
+    padding: theme.spacing.md,
+    backgroundColor: theme.colors.error,
+    borderRadius: theme.borderRadius.md,
+    alignItems: 'center',
+  },
+  
+  cancelButtonText: {
+    ...theme.typography.body,
+    color: theme.colors.text,
+    fontWeight: '600',
+  },
+  
+  confirmButtonText: {
+    ...theme.typography.body,
+    color: theme.colors.surface,
+    fontWeight: '600',
   },
 });

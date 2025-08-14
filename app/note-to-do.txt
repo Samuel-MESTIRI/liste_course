@@ -1,0 +1,11 @@
+bouton favoris : il ouvre une page ou on retrouve nos page favorite
+
+Quand on reste appuyer sur un element de la liste il faut que les recettes relié soit un lien vers la fiche recette et non la page modifier
+
+le bouton vider la liste n'est pas au bon design/endroit
+
+refactor la page recette qui devient le magasin de recette avec des sections etc
+
+refactor page modifier recette car trop compliqué a créer 
+===> faire une integration par IA, photo de livre de recette
+

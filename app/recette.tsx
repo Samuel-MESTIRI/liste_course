@@ -18,6 +18,7 @@ export default function RecipePage() {
   const [showFavoritesOnly, setShowFavoritesOnly] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [showSearchInput, setShowSearchInput] = useState<boolean>(false);
+  const [foodAnimations, setFoodAnimations] = useState<{[key: number]: boolean}>({});
 
   const [filteredRecipes, setFilteredRecipes] = useState<Recipe[]>([]);
   
@@ -29,6 +30,9 @@ export default function RecipePage() {
 
   // Animations pour les favoris - seulement des refs
   const favoriteAnimationRefs = useRef<{[key: number]: Animated.Value}>({});
+  
+  // Animations pour les icônes de nourriture
+  const foodAnimationRefs = useRef<{[key: number]: Animated.Value[]}>({});
 
   useEffect(() => {
     loadRecipes();
@@ -123,6 +127,9 @@ export default function RecipePage() {
       }
       
       await ShoppingListManager.addRecipeToShoppingList(recipeId);
+      
+      // Déclencher l'animation des icônes de nourriture
+      triggerFoodAnimation(recipeId);
     } catch (error) {
       console.error('Erreur lors de l\'ajout à la liste:', error);
       alert('Erreur lors de l\'ajout à la liste de courses');
@@ -152,6 +159,39 @@ export default function RecipePage() {
     ]).start();
   };
 
+  const triggerFoodAnimation = (recipeId: number) => {
+    // Créer les animations pour les 3 icônes si elles n'existent pas
+    if (!foodAnimationRefs.current[recipeId]) {
+      foodAnimationRefs.current[recipeId] = [
+        new Animated.Value(0),
+        new Animated.Value(0),
+        new Animated.Value(0)
+      ];
+    }
+
+    // Afficher les icônes pour cette recette
+    setFoodAnimations(prev => ({ ...prev, [recipeId]: true }));
+
+    const animations = foodAnimationRefs.current[recipeId];
+    
+    // Lancer les animations en parallèle avec des délais différents
+    Animated.stagger(150, animations.map((anim, index) => 
+      Animated.sequence([
+        Animated.delay(index * 100),
+        Animated.timing(anim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        })
+      ])
+    )).start(() => {
+      // Cacher les icônes après l'animation
+      setFoodAnimations(prev => ({ ...prev, [recipeId]: false }));
+      // Réinitialiser les animations
+      animations.forEach(anim => anim.setValue(0));
+    });
+  };
+
   const toggleFavorite = async (recipeId: number) => {
     try {
       if (favorites.has(recipeId)) {
@@ -179,6 +219,9 @@ export default function RecipePage() {
 
   const renderRecipe = ({ item: recipe }: { item: Recipe }) => {
     const favoriteAnimation = favoriteAnimationRefs.current[recipe.id];
+    const foodEmojis = ['🥕', '🥩', '🍎']; // Carotte, Viande, Pomme
+    const showAnimation = foodAnimations[recipe.id];
+    const animations = foodAnimationRefs.current[recipe.id] || [];
 
     return (
       <View style={styles.recipeCardContainer}>
@@ -245,6 +288,46 @@ export default function RecipePage() {
             </View>
           </TouchableOpacity>
         </Card>
+
+        {/* Animation des icônes de nourriture */}
+        {showAnimation && animations.map((anim, index) => (
+          <Animated.View
+            key={index}
+            style={[
+              styles.foodIcon,
+              {
+                transform: [
+                  {
+                    translateX: anim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, -350], // Vers la gauche encore plus loin
+                    }),
+                  },
+                  {
+                    translateY: anim.interpolate({
+                      inputRange: [0, 0.5, 1],
+                      outputRange: [0, -30, 0], // Légère courbe vers le haut puis vers le bas
+                    }),
+                  },
+                  {
+                    scale: anim.interpolate({
+                      inputRange: [0, 0.2, 0.8, 1],
+                      outputRange: [0.5, 1.2, 1, 0.8], // Grossit puis rapetisse
+                    }),
+                  },
+                ],
+                opacity: anim.interpolate({
+                  inputRange: [0, 0.2, 0.8, 1],
+                  outputRange: [0, 1, 1, 0], // Apparaît puis disparaît
+                }),
+              },
+            ]}
+          >
+            <Text style={styles.foodEmoji}>
+              {foodEmojis[index]}
+            </Text>
+          </Animated.View>
+        ))}
       </View>
     );
   };
@@ -648,5 +731,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     ...theme.shadows.large,
+  },
+  
+  foodIcon: {
+    position: 'absolute',
+    top: '50%',
+    right: '20%',
+    zIndex: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 20,
+    padding: theme.spacing.sm,
+    ...theme.shadows.small,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  
+  foodEmoji: {
+    fontSize: 24,
   },
 });
