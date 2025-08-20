@@ -2,8 +2,6 @@
 
 ----------- FONCTIONELLE -----------------------
 
-bouton favoris : il ouvre une page ou on retrouve nos page favorite
-
 refactor la page recette qui devient le magasin de recette avec des sections etc
 
 ===> page ajout recette => faire une integration par IA, photo de livre de recette
@@ -15,3 +13,5 @@ refactor la page recette qui devient le magasin de recette avec des sections etc
 le bouton vider la liste n'est pas au bon design/endroit
 
 refactor page modifier recette car trop compliqué a créer 
+Ajoute les unités suivante : CaS, CaC
+Suprimer l'unité u, et ne mettre vide a la place  

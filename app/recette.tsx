@@ -1,10 +1,8 @@
 import { FontAwesome } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Animated, FlatList, Image, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
-import { Button } from "../src/components/Button";
-import { Card } from "../src/components/Card";
-import { Input } from "../src/components/Input";
+import { Animated, FlatList, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Input, RecipeItem } from "../src/components";
 import { FavoriteManager, RecipeIngredientManager, RecipeManager, RecipeTagManager, ShoppingListManager, TagManager } from "../src/services/storage";
 import { theme } from "../src/styles/theme";
 import { Recipe, Tag } from "../src/types";
@@ -15,7 +13,6 @@ export default function RecipePage() {
   const [tags, setTags] = useState<Tag[]>([]);
   const [selectedTags, setSelectedTags] = useState<Set<number>>(new Set());
   const [favorites, setFavorites] = useState<Set<number>>(new Set());
-  const [showFavoritesOnly, setShowFavoritesOnly] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [showSearchInput, setShowSearchInput] = useState<boolean>(false);
   const [foodAnimations, setFoodAnimations] = useState<{[key: number]: boolean}>({});
@@ -50,15 +47,10 @@ export default function RecipePage() {
 
   useEffect(() => {
     filterRecipes();
-  }, [recipes, selectedTags, showFavoritesOnly, searchQuery]);
+  }, [recipes, selectedTags, searchQuery]);
 
   const filterRecipes = async () => {
     let filtered = recipes;
-
-    // Filtre par favoris si activé
-    if (showFavoritesOnly) {
-      filtered = filtered.filter(recipe => favorites.has(recipe.id));
-    }
 
     // Filtre par recherche textuelle
     if (searchQuery.trim() !== '') {
@@ -219,116 +211,19 @@ export default function RecipePage() {
 
   const renderRecipe = ({ item: recipe }: { item: Recipe }) => {
     const favoriteAnimation = favoriteAnimationRefs.current[recipe.id];
-    const foodEmojis = ['🥕', '🥩', '🍎']; // Carotte, Viande, Pomme
     const showAnimation = foodAnimations[recipe.id];
     const animations = foodAnimationRefs.current[recipe.id] || [];
 
     return (
-      <View style={styles.recipeCardContainer}>
-        <Card style={styles.recipeCard}>
-          <TouchableOpacity
-            style={styles.recipeContent}
-            onPress={() => router.push(`/fiche-recette/${recipe.id}`)}
-          >
-            {recipe.imageUri ? (
-              <Image
-                source={{ uri: recipe.imageUri }}
-                style={styles.recipeImage}
-                resizeMode="cover"
-              />
-            ) : (
-              <View style={styles.recipePlaceholder}>
-                <FontAwesome name="image" size={32} color={theme.colors.textLight} />
-              </View>
-            )}
-            
-            <View style={styles.recipeInfo}>
-              <View style={styles.recipeHeader}>
-                <Text style={styles.recipeTitle} numberOfLines={2}>
-                  {recipe.name}
-                </Text>
-                <Animated.View
-                  style={{
-                    transform: [
-                      {
-                        scale: favoriteAnimation || 1
-                      }
-                    ]
-                  }}
-                >
-                  <TouchableOpacity
-                    style={styles.favoriteButton}
-                    onPress={() => toggleFavorite(recipe.id)}
-                  >
-                    <FontAwesome
-                      name={favorites.has(recipe.id) ? "heart" : "heart-o"}
-                      size={20}
-                      color={favorites.has(recipe.id) ? theme.colors.error : theme.colors.textSecondary}
-                    />
-                  </TouchableOpacity>
-                </Animated.View>
-              </View>
-              
-              {recipe.description && (
-                <Text style={styles.recipeDescription} numberOfLines={2}>
-                  {recipe.description}
-                </Text>
-              )}
-              
-              <View style={styles.recipeActions}>            
-                <Button
-                  title="Ajouter"
-                  icon="cart-plus"
-                  variant="primary"
-                  size="small"
-                  onPress={() => addToShoppingList(recipe.id)}
-                  style={styles.addToListButton}
-                />
-              </View>
-            </View>
-          </TouchableOpacity>
-        </Card>
-
-        {/* Animation des icônes de nourriture */}
-        {showAnimation && animations.map((anim, index) => (
-          <Animated.View
-            key={index}
-            style={[
-              styles.foodIcon,
-              {
-                transform: [
-                  {
-                    translateX: anim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0, -350], // Vers la gauche encore plus loin
-                    }),
-                  },
-                  {
-                    translateY: anim.interpolate({
-                      inputRange: [0, 0.5, 1],
-                      outputRange: [0, -30, 0], // Légère courbe vers le haut puis vers le bas
-                    }),
-                  },
-                  {
-                    scale: anim.interpolate({
-                      inputRange: [0, 0.2, 0.8, 1],
-                      outputRange: [0.5, 1.2, 1, 0.8], // Grossit puis rapetisse
-                    }),
-                  },
-                ],
-                opacity: anim.interpolate({
-                  inputRange: [0, 0.2, 0.8, 1],
-                  outputRange: [0, 1, 1, 0], // Apparaît puis disparaît
-                }),
-              },
-            ]}
-          >
-            <Text style={styles.foodEmoji}>
-              {foodEmojis[index]}
-            </Text>
-          </Animated.View>
-        ))}
-      </View>
+      <RecipeItem
+        recipe={recipe}
+        isFavorite={favorites.has(recipe.id)}
+        favoriteAnimation={favoriteAnimation}
+        showFoodAnimation={showAnimation}
+        foodAnimations={animations}
+        onToggleFavorite={toggleFavorite}
+        onAddToShoppingList={addToShoppingList}
+      />
     );
   };
 
@@ -361,8 +256,6 @@ export default function RecipePage() {
         newSet.delete(tagId);
       } else {
         newSet.add(tagId);
-        // Quand on sélectionne un tag, on désactive le filtre favoris
-        setShowFavoritesOnly(false);
       }
       return newSet;
     });
@@ -381,9 +274,8 @@ export default function RecipePage() {
         ]}
         onPress={() => {
           if (isAllTag) {
-            // Si on clique sur "Tous", on vide la sélection et on désactive le filtre favoris
+            // Si on clique sur "Tous", on vide la sélection
             setSelectedTags(new Set());
-            setShowFavoritesOnly(false);
           } else {
             toggleTag(tag.id);
           }
@@ -418,22 +310,13 @@ export default function RecipePage() {
           
           <View style={styles.headerRight}>
             <TouchableOpacity
-              style={[
-                styles.favoriteFilterButton,
-                showFavoritesOnly && styles.favoriteFilterButtonActive
-              ]}
-              onPress={() => {
-                setShowFavoritesOnly(!showFavoritesOnly);
-                // Quand on active le filtre favoris, on désélectionne tous les tags
-                if (!showFavoritesOnly) {
-                  setSelectedTags(new Set());
-                }
-              }}
+              style={styles.favoriteButton}
+              onPress={() => router.push("/favoris")}
             >
               <FontAwesome 
-                name={showFavoritesOnly ? "heart" : "heart-o"} 
+                name="heart" 
                 size={20} 
-                color={showFavoritesOnly ? theme.colors.surface : theme.colors.primary} 
+                color={theme.colors.primary} 
               />
             </TouchableOpacity>
             
@@ -565,7 +448,7 @@ const styles = StyleSheet.create({
     ...theme.shadows.small,
   },
   
-  favoriteFilterButton: {
+  favoriteButton: {
     width: 44,
     height: 44,
     borderRadius: theme.borderRadius.round,
@@ -573,10 +456,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     ...theme.shadows.small,
-  },
-  
-  favoriteFilterButtonActive: {
-    backgroundColor: theme.colors.primary,
   },
   
   filterSection: {
@@ -625,86 +504,6 @@ const styles = StyleSheet.create({
     gap: theme.spacing.md,
   },
   
-  recipeCardContainer: {
-    flex: 1,
-    position: 'relative',
-  },
-  
-  recipeCard: {
-    flex: 1,
-    marginBottom: theme.spacing.md,
-    padding: 0,
-    overflow: 'hidden',
-  },
-  
-  recipeContent: {
-    flex: 1,
-  },
-  
-  recipeImage: {
-    width: '100%',
-    height: 120,
-    backgroundColor: theme.colors.background,
-  },
-  
-  recipePlaceholder: {
-    width: '100%',
-    height: 120,
-    backgroundColor: theme.colors.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  
-  recipeInfo: {
-    padding: theme.spacing.md,
-  },
-  
-  recipeHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: theme.spacing.sm,
-  },
-  
-  recipeTitle: {
-    ...theme.typography.h3,
-    color: theme.colors.text,
-    flex: 1,
-    marginRight: theme.spacing.sm,
-  },
-  
-  favoriteButton: {
-    padding: theme.spacing.xs,
-  },
-  
-  recipeDescription: {
-    ...theme.typography.bodySmall,
-    color: theme.colors.textSecondary,
-    marginBottom: theme.spacing.md,
-  },
-  
-  recipeActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  
-  recipeTime: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.xs,
-  },
-  
-  timeText: {
-    ...theme.typography.bodySmall,
-    color: theme.colors.textSecondary,
-  },
-  
-  addToListButton: {
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-  },
-  
   searchContainer: {
     overflow: 'hidden',
     backgroundColor: theme.colors.background,
@@ -731,22 +530,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     ...theme.shadows.large,
-  },
-  
-  foodIcon: {
-    position: 'absolute',
-    top: '50%',
-    right: '20%',
-    zIndex: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderRadius: 20,
-    padding: theme.spacing.sm,
-    ...theme.shadows.small,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  
-  foodEmoji: {
-    fontSize: 24,
   },
 });

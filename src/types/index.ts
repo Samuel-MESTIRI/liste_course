@@ -43,3 +43,13 @@ export interface FavoriteRecipe {
   recipeId: number;
   addedAt: Date;
 }
+
+export interface RecipeItemProps {
+  recipe: Recipe;
+  isFavorite: boolean;
+  favoriteAnimation?: any; // Animated.Value
+  showFoodAnimation: boolean;
+  foodAnimations: any[]; // Animated.Value[]
+  onToggleFavorite: (recipeId: number) => void;
+  onAddToShoppingList: (recipeId: number) => void;
+}
