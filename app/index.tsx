@@ -434,7 +434,7 @@ export default function ShoppingListPage() {
                     style={styles.recipeItem}
                     onPress={() => {
                       closeModal();
-                      router.push(`/modifier-recette/${recipe.id}`);
+                      router.push(`/fiche-recette/${recipe.id}`);
                     }}
                   >
                     <Text style={styles.recipeItemName}>{recipe.name}</Text>
